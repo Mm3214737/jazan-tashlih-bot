@@ -1,0 +1,42 @@
+import os
+import json
+import uuid
+import requests
+from fastapi import FastAPI, Request
+from supabase import create_client, Client
+from google import genai
+from google.genai import types
+
+app = FastAPI()
+
+# ==========================================
+# 1. إعداد المفاتيح (تُقرأ من متغيرات البيئة)
+# ==========================================
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://kdcmeoqgllldycncmxpc.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+
+GREEN_ID = os.getenv("GREEN_ID", "710722812642")
+GREEN_TOKEN = os.getenv("GREEN_TOKEN", "")
+GREEN_API_URL = f"https://7107.api.greenapi.com/waInstance{GREEN_ID}"
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+
+# ==========================================
+# 2. دوال الإرسال عبر Green-API
+# ==========================================
+def send_whatsapp_text(chat_id: str, text: str):
+    url = f"{GREEN_API_URL}/sendMessage/{GREEN_TOKEN}"
+    payload = {"chatId": chat_id, "message": text}
+    requests.post(url, json=payload)
+
+def send_whatsapp_image(chat_id: str, image_url: str, caption: str):
+    url = f"{GREEN_API_URL}/sendFileByUrl/{GREEN_TOKEN}"
+    payload = {
+        "chatId": chat_id,
+        "urlFile": image_url,
+        "fileName": "part.jpg",
+        "caption": caption
+    }
