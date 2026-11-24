@@ -18,7 +18,8 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 def send_whatsapp_text(chat_id: str, text: str):
-    requests.post(f"{GREEN_API_URL}/sendMessage/{GREEN_TOKEN}", json={"chatId": chat_id, "message": text}, timeout=10)
+    res = requests.post(f"{GREEN_API_URL}/sendMessage/{GREEN_TOKEN}", json={"chatId": chat_id, "message": text}, timeout=10)
+    print("GreenAPI Send Status:", res.status_code, res.text)
 
 def send_whatsapp_image(chat_id: str, image_url: str, caption: str):
     requests.post(
@@ -36,7 +37,8 @@ def call_gemini_safe(contents) -> dict:
                 config=types.GenerateContentConfig(response_mime_type="application/json")
             )
             return json.loads(res.text)
-        except Exception:
+        except Exception as e:
+            print("Gemini Error:", e)
             if attempt == 0:
                 time.sleep(1)
                 continue
