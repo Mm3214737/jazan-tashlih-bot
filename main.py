@@ -60,17 +60,26 @@ def analyze_part_image(image_bytes: bytes, caption: str) -> dict:
         return {"part_name": caption or "قطعة غيار", "car_make": "", "car_model": "", "condition": "مستعملة", "price": 0}
     return res
 
-def search_external_web(query: str) -> str:
+def search_haraj_web(query: str) -> str:
     if not SERPER_API_KEY or SERPER_API_KEY == "none":
         return ""
     res = requests.post(
         "https://google.serper.dev/search",
         headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
-        json={"q": f"{query} تشليح السعودية حراج", "gl": "sa", "hl": "ar", "num": 3},
+        json={"q": f"site:haraj.com.sa {query} تشليح جيزان", "gl": "sa", "hl": "ar", "num": 4},
         timeout=8
     )
     if res.status_code == 200:
-        return "\n".join([f"- {r.get('title')}: {r.get('link')}" for r in res.json().get("organic", [])])
+        results = res.json().get("organic", [])
+        if not results:
+            res = requests.post(
+                "https://google.serper.dev/search",
+                headers={"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"},
+                json={"q": f"site:haraj.com.sa {query} تشليح", "gl": "sa", "hl": "ar", "num": 4},
+                timeout=8
+            )
+            results = res.json().get("organic", [])
+        return "\n\n".join([f"🔹 *{r.get('title')}*\n🔗 {r.get('link')}" for r in results])
     return ""
 
 def process_incoming_message(data: dict):
@@ -117,16 +126,16 @@ def process_incoming_message(data: dict):
                     else:
                         send_whatsapp_text(chat_id, caption)
             else:
-                web_links = search_external_web(f"{part_name} {car_make} {car_model}")
+                haraj_links = search_haraj_web(f"{part_name} {car_make} {car_model}")
                 reply = f"⚠️ عذراً، لم تتوفر *{part_name} {car_make} {car_model}* حالياً في قاعدة بيانات تشاليح جيزان المسجلة."
-                if web_links:
-                    reply += f"\n\n🌐 نتائج مقترحة من الإنترنت:\n{web_links}"
+                if haraj_links:
+                    reply += f"\n\n🌐 *أحدث إعلانات حراج المطابقة:*\n\n{haraj_links}"
                 send_whatsapp_text(chat_id, reply)
         else:
             send_whatsapp_text(chat_id, "اكتب *مرحبا* لعرض القائمة، أو اكتب اسم القطعة وسيارتك للبحث عنها مباشرة 🚗")
 
     elif msg_type == "imageMessage":
-        file_data = message_data.get("fileMessageData", {})
+        file_data = msg_data.get("fileMessageData", {})
         yard_res = supabase.table("yards").select("*").eq("phone", phone).execute().data
         if not yard_res:
             send_whatsapp_text(chat_id, "⚠️ رقمك غير مسجل كتشليح بعد.\nأرسل أولاً: *تسجيل تشليح [اسم تشليحك] صناعية جيزان*")
