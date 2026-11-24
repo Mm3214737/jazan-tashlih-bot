@@ -1,5 +1,5 @@
 import os, json, uuid, time, requests
-from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi import FastAPI, Request
 from supabase import create_client, Client
 from google import genai
 from google.genai import types
@@ -31,7 +31,7 @@ def call_gemini_safe(contents) -> dict:
     for attempt in range(2):
         try:
             res = ai_client.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-2.5-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(response_mime_type="application/json")
             )
@@ -82,7 +82,17 @@ def search_haraj_web(query: str) -> str:
         return "\n\n".join([f"🔹 *{r.get('title')}*\n🔗 {r.get('link')}" for r in results])
     return ""
 
-def process_incoming_message(data: dict):
+@app.get("/")
+@app.head("/")
+def home():
+    return {"status": "Jazan Tashlih Bot is Live!"}
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+    if data.get("typeWebhook") != "incomingMessageReceived":
+        return {"status": "ignored"}
+
     chat_id = data.get("senderData", {}).get("chatId", "")
     phone = chat_id.replace("@c.us", "")
     msg_data = data.get("messageData", {})
@@ -95,17 +105,13 @@ def process_incoming_message(data: dict):
 
         if intent == "busy":
             send_whatsapp_text(chat_id, "⏳ النظام عليه ضغط بسيط حالياً، أعد إرسال طلبك بعد لحظات.")
-            return
-
-        if intent == "greeting":
+        elif intent == "greeting":
             send_whatsapp_text(chat_id, "أهلاً بك في *سوق تشاليح جيزان الذكي* 🚗🔧\n\n🔹 *للباحثين عن قطع غيار:*\nأرسل اسم القطعة والسيارة والموديل مباشرة (مثال: _ابغى صدام أمامي كامري 2020_).\n\n🔹 *لأصحاب التشاليح والموردين:*\n1️⃣ لتسجيل تشليحك أرسل: _تسجيل تشليح [اسم التشليح] [الموقع]_\n2️⃣ لإضافة قطعة: أرسل *صورة القطعة* واكتب معها اسمها والسيارة والسعر.")
-
         elif intent == "register_yard":
             yard_name = analysis.get("yard_name") or text.replace("تسجيل", "").strip()
             location = analysis.get("location") or "صناعية جيزان"
             supabase.table("yards").upsert({"phone": phone, "name": yard_name, "location": location}, on_conflict="phone").execute()
             send_whatsapp_text(chat_id, f"✅ تم تسجيل *{yard_name}* ({location}) بنجاح!\nيمكنك الآن إرسال صور القطع مع الوصف والسعر لعرضها للمشترين فوراً.")
-
         elif intent == "search_part":
             part_name, car_make, car_model = analysis.get("part_name", ""), analysis.get("car_make", ""), analysis.get("car_model", "")
             query = supabase.table("parts").select("*, yards(name, phone, location)")
@@ -139,7 +145,7 @@ def process_incoming_message(data: dict):
         yard_res = supabase.table("yards").select("*").eq("phone", phone).execute().data
         if not yard_res:
             send_whatsapp_text(chat_id, "⚠️ رقمك غير مسجل كتشليح بعد.\nأرسل أولاً: *تسجيل تشليح [اسم تشليحك] صناعية جيزان*")
-            return
+            return {"status": "unregistered"}
 
         img_bytes = requests.get(file_data.get("downloadUrl", ""), timeout=15).content
         file_name = f"{uuid.uuid4()}.jpg"
@@ -160,14 +166,4 @@ def process_incoming_message(data: dict):
 
         send_whatsapp_text(chat_id, f"✅ تم نشر القطعة بنجاح!\n🔧 القطعة: *{part_info.get('part_name')}*\n🚗 السيارة: {part_info.get('car_make')} {part_info.get('car_model')}\n💰 السعر: {part_info.get('price')} ريال")
 
-@app.get("/")
-@app.head("/")
-def home():
-    return {"status": "Jazan Tashlih Bot is Live!"}
-
-@app.post("/webhook")
-async def webhook(request: Request, background_tasks: BackgroundTasks):
-    data = await request.json()
-    if data.get("typeWebhook") == "incomingMessageReceived":
-        background_tasks.add_task(process_incoming_message, data)
-    return {"status": "received"}
+    return {"status": "ok"}
