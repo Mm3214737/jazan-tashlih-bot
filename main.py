@@ -32,7 +32,7 @@ def call_gemini_safe(contents) -> dict:
     for attempt in range(2):
         try:
             res = ai_client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.8-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(response_mime_type="application/json")
             )
